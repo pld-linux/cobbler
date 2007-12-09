@@ -4,16 +4,17 @@
 Summary:	Boot server configurator
 Name:		cobbler
 Version:	0.6.4
-Release:	0.5
+Release:	0.6
 Source0:	http://cobbler.et.redhat.com/download/%{name}-%{version}.tar.gz
 # Source0-md5:	1f46e1860e10b2e250c73ebb2a3d8227
 Source1:	%{name}-apache.conf
 License:	GPL v2+
 Group:		Applications/System
+Requires:	apache-mod_proxy
 Requires:	apache-mod_python
 Requires:	createrepo
 Requires:	python >= 2.3
-Requires:	python-cheetah
+Requires:	python-cheetah >= 2.0
 Requires:	python-devel
 Requires:	python-rhpl
 Requires:	tftpdaemon
@@ -63,12 +64,14 @@ install -d $RPM_BUILD_ROOT/etc/rc.d/init.d
 	--root=$RPM_BUILD_ROOT
 
 install -d $RPM_BUILD_ROOT%{_webapps}/%{_webapp}
-cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_webapps}/%{_webapp}/apache.conf
-cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_webapps}/%{_webapp}/httpd.conf
+#cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_webapps}/%{_webapp}/apache.conf
+#cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_webapps}/%{_webapp}/httpd.conf
+mv $RPM_BUILD_ROOT{%{_sysconfdir}/httpd/conf.d/cobbler.conf,%{_webapps}/%{_webapp}/apache.conf}
+cp $RPM_BUILD_ROOT%{_webapps}/%{_webapp}/{apache,httpd}.conf
 
 %py_postclean
 
-mv $RPM_BUILD_ROOT/etc/{init.d,rc.d/init.d}/cobblerd
+mv $RPM_BUILD_ROOT/''etc/{init.d,rc.d/init.d}/cobblerd
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -177,7 +180,6 @@ fi
 %{py_sitescriptdir}/cobbler/webui/*.py[co]
 %{_mandir}/man1/cobbler.1*
 %attr(754,root,root) /etc/rc.d/init.d/cobblerd
-%config(noreplace) %{_sysconfdir}/httpd/conf.d/cobbler.conf
 %dir /var/log/cobbler/syslog
 
 %defattr(755,root,root)
