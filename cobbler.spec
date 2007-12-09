@@ -1,20 +1,23 @@
+# TODO
+# - webapps
+# - ImportError: No module named rhpl.translate
 Summary:	Boot server configurator
 Name:		cobbler
 Version:	0.6.4
-Release:	0.1
-Source0:	http://cobbler.et.redhat.com/download/cobbler-0.6.4.tar.gz
+Release:	0.3
+Source0:	http://cobbler.et.redhat.com/download/%{name}-%{version}.tar.gz
 # Source0-md5:	1f46e1860e10b2e250c73ebb2a3d8227
 License:	GPL v2+
 Group:		Applications/System
+Requires:	apache-mod_python
 Requires:	createrepo
-Requires:	httpd
-Requires:	mod_python
 Requires:	python >= 2.3
 Requires:	python-cheetah
 Requires:	python-devel
-Requires:	rhpl
-Requires:	tftp-server
-%ifarch i386 i686 x86_64
+Requires:	python-rhpl
+Requires:	tftpdaemon
+Requires:	webapps
+%ifarch %{ix86} %{x8664}
 Requires:	syslinux
 %endif
 URL:		http://cobbler.et.redhat.com
@@ -26,6 +29,12 @@ Requires(preun):	/sbin/chkconfig
 BuildArch:	noarch
 ExcludeArch:	ppc
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
+
+%define		_appdir		/var/www/cobbler
+%define		_cgibindir	/var/www/cgi-bin
+
+#define		_appdir		%{_datadir}/%{name}
+#define     _cgibindir	%{_prefix}/lib/cgi-bin/%{name}
 
 %description
 Cobbler is a network boot and update server. Cobbler supports PXE,
@@ -69,50 +78,50 @@ cp /var/lib/cobbler/repos*    /var/lib/cobbler/backup 2>/dev/null
 %preun
 if [ $1 = 0 ]; then
 	%service cobblerd stop
-	chkconfig --del cobblerd
+	/sbin/chkconfig --del cobblerd
 fi
 
 %files
 %defattr(644,root,root,755)
 %doc AUTHORS CHANGELOG README
-%defattr(755,apache,apache)
-%dir /var/www/cgi-bin/cobbler
-/var/www/cgi-bin/cobbler/findks.cgi
-/var/www/cgi-bin/cobbler/nopxe.cgi
-/var/www/cgi-bin/cobbler/webui.cgi
-%defattr(660,apache,apache)
-%config(noreplace) /var/www/cgi-bin/cobbler/.htaccess
-%config(noreplace) /var/www/cgi-bin/cobbler/.htpasswd
+%defattr(755,http,http)
+%dir %{_cgibindir}/cobbler
+%{_cgibindir}/cobbler/findks.cgi
+%{_cgibindir}/cobbler/nopxe.cgi
+%{_cgibindir}/cobbler/webui.cgi
+%defattr(660,http,http)
+%config(noreplace) %{_cgibindir}/cobbler/.htaccess
+%config(noreplace) %{_cgibindir}/cobbler/.htpasswd
 
-%defattr(755,apache,apache)
+%defattr(755,http,http)
 %dir %{_datadir}/cobbler/webui_templates
-%defattr(444,apache,apache)
+%defattr(444,http,http)
 %{_datadir}/cobbler/webui_templates/*.tmpl
 
-%defattr(4755,apache,apache)
+%defattr(4755,http,http)
 %dir /var/log/cobbler
 %dir /var/log/cobbler/kicklog
-%dir /var/www/cobbler/
-%dir /var/www/cobbler/localmirror
-%dir /var/www/cobbler/kickstarts
-%dir /var/www/cobbler/kickstarts_sys
-%dir /var/www/cobbler/repo_mirror
-%dir /var/www/cobbler/repos_profile
-%dir /var/www/cobbler/repos_system
-%dir /var/www/cobbler/ks_mirror
-%dir /var/www/cobbler/ks_mirror/config
-%dir /var/www/cobbler/images
-%dir /var/www/cobbler/distros
-%dir /var/www/cobbler/profiles
-%dir /var/www/cobbler/systems
-%dir /var/www/cobbler/links
-%defattr(755,apache,apache)
-%dir /var/www/cobbler/webui
-%defattr(444,apache,apache)
-/var/www/cobbler/webui/*.css
-/var/www/cobbler/webui/*.js
-/var/www/cobbler/webui/*.png
-/var/www/cobbler/webui/*.html
+%dir %{_appdir}
+%dir %{_appdir}/localmirror
+%dir %{_appdir}/kickstarts
+%dir %{_appdir}/kickstarts_sys
+%dir %{_appdir}/repo_mirror
+%dir %{_appdir}/repos_profile
+%dir %{_appdir}/repos_system
+%dir %{_appdir}/ks_mirror
+%dir %{_appdir}/ks_mirror/config
+%dir %{_appdir}/images
+%dir %{_appdir}/distros
+%dir %{_appdir}/profiles
+%dir %{_appdir}/systems
+%dir %{_appdir}/links
+%defattr(755,http,http)
+%dir %{_appdir}/webui
+%defattr(444,http,http)
+%{_appdir}/webui/*.css
+%{_appdir}/webui/*.js
+%{_appdir}/webui/*.png
+%{_appdir}/webui/*.html
 %defattr(-,root,root)
 %dir /tftpboot/pxelinux.cfg
 %dir /tftpboot/images
@@ -178,7 +187,7 @@ fi
 %config(noreplace) /var/lib/cobbler/snippets/partition_select
 /var/lib/cobbler/elilo-3.6-ia64.efi
 /var/lib/cobbler/menu.c32
-%defattr(660,apache,apache)
+%defattr(660,http,http)
 %config(noreplace) %{_sysconfdir}/cobbler/auth.conf
 
 %defattr(664,root,root)
