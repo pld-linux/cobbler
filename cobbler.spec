@@ -1,12 +1,13 @@
 # TODO
 # - webapps
-# - ImportError: No module named rhpl.translate
+# - FHS in web paths
 Summary:	Boot server configurator
 Name:		cobbler
 Version:	0.6.4
-Release:	0.3
+Release:	0.5
 Source0:	http://cobbler.et.redhat.com/download/%{name}-%{version}.tar.gz
 # Source0-md5:	1f46e1860e10b2e250c73ebb2a3d8227
+Source1:	%{name}-apache.conf
 License:	GPL v2+
 Group:		Applications/System
 Requires:	apache-mod_python
@@ -20,7 +21,7 @@ Requires:	webapps
 %ifarch %{ix86} %{x8664}
 Requires:	syslinux
 %endif
-URL:		http://cobbler.et.redhat.com
+URL:		http://cobbler.et.redhat.com/
 BuildRequires:	python-cheetah
 BuildRequires:	python-devel
 #BuildRequires:	redhat-rpm-config
@@ -30,6 +31,8 @@ BuildArch:	noarch
 ExcludeArch:	ppc
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
+%define		_webapps	/etc/webapps
+%define		_webapp		%{name}
 %define		_appdir		/var/www/cobbler
 %define		_cgibindir	/var/www/cgi-bin
 
@@ -59,6 +62,10 @@ install -d $RPM_BUILD_ROOT/etc/rc.d/init.d
 	--optimize=1 \
 	--root=$RPM_BUILD_ROOT
 
+install -d $RPM_BUILD_ROOT%{_webapps}/%{_webapp}
+cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_webapps}/%{_webapp}/apache.conf
+cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_webapps}/%{_webapp}/httpd.conf
+
 %py_postclean
 
 mv $RPM_BUILD_ROOT/etc/{init.d,rc.d/init.d}/cobblerd
@@ -81,9 +88,26 @@ if [ $1 = 0 ]; then
 	/sbin/chkconfig --del cobblerd
 fi
 
+%triggerin -- apache1 < 1.3.37-3, apache1-base
+%webapp_register apache %{_webapp}
+
+%triggerun -- apache1 < 1.3.37-3, apache1-base
+%webapp_unregister apache %{_webapp}
+
+%triggerin -- apache < 2.2.0, apache-base
+%webapp_register httpd %{_webapp}
+
+%triggerun -- apache < 2.2.0, apache-base
+%webapp_unregister httpd %{_webapp}
+
 %files
 %defattr(644,root,root,755)
 %doc AUTHORS CHANGELOG README
+
+%dir %attr(750,root,http) %{_webapps}/%{_webapp}
+%attr(640,root,root) %config(noreplace) %verify(not md5 mtime size) %{_webapps}/%{_webapp}/apache.conf
+%attr(640,root,root) %config(noreplace) %verify(not md5 mtime size) %{_webapps}/%{_webapp}/httpd.conf
+
 %defattr(755,http,http)
 %dir %{_cgibindir}/cobbler
 %{_cgibindir}/cobbler/findks.cgi
@@ -94,6 +118,7 @@ fi
 %config(noreplace) %{_cgibindir}/cobbler/.htpasswd
 
 %defattr(755,http,http)
+%dir %{_datadir}/cobbler
 %dir %{_datadir}/cobbler/webui_templates
 %defattr(444,http,http)
 %{_datadir}/cobbler/webui_templates/*.tmpl
