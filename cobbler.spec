@@ -1,15 +1,22 @@
 # TODO
+# - avoid using defattr() and giving too much dirs/files to http
 # - webapps
 # - FHS in web paths
 Summary:	Boot server configurator
+Summary(pl.UTF-8):	Konfiguracja serwera startującego
 Name:		cobbler
 Version:	0.6.4
 Release:	0.6
+License:	GPL v2+
+Group:		Applications/System
 Source0:	http://cobbler.et.redhat.com/download/%{name}-%{version}.tar.gz
 # Source0-md5:	1f46e1860e10b2e250c73ebb2a3d8227
 Source1:	%{name}-apache.conf
-License:	GPL v2+
-Group:		Applications/System
+URL:		http://cobbler.et.redhat.com/
+BuildRequires:	python-cheetah
+BuildRequires:	python-devel
+#BuildRequires:	redhat-rpm-config
+Requires(post,preun):	/sbin/chkconfig
 Requires:	apache-mod_proxy
 Requires:	apache-mod_python
 Requires:	createrepo
@@ -22,12 +29,6 @@ Requires:	webapps
 %ifarch %{ix86} %{x8664}
 Requires:	syslinux
 %endif
-URL:		http://cobbler.et.redhat.com/
-BuildRequires:	python-cheetah
-BuildRequires:	python-devel
-#BuildRequires:	redhat-rpm-config
-Requires(post):	/sbin/chkconfig
-Requires(preun):	/sbin/chkconfig
 BuildArch:	noarch
 ExcludeArch:	ppc
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
@@ -44,11 +45,22 @@ BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 Cobbler is a network boot and update server. Cobbler supports PXE,
 provisioning virtualized images, and reinstalling existing Linux
 machines. The last two modes require a helper tool called 'koan' that
-integrates with cobbler. Cobbler's advanced features include importing
+integrates with Cobbler. Cobbler's advanced features include importing
 distributions from DVDs and rsync mirrors, kickstart templating,
 integrated yum mirroring, and built-in DHCP Management. Cobbler has a
 Python API for integration with other GPL systems management
 applications.
+
+%description -l pl.UTF-8
+Cobbler to sieciowy serwer do uruchamiania i uaktualniania komputerów.
+Obsługuje PXE, udostępnianie wirtualizowanych obrazów i reinstalowanie
+istniejących maszyn linuksowych. Dwa ostatnie tryby wymagają pakietu
+pomocniczego o nazwie "koan", integrującego się z Cobblerem.
+Zaawansowane możliwości Cobblera obejmują importowanie dystrybucji z
+płyt DVD i mirrorów rsynca, szablony uruchamiania, zintegrowane
+mirrorowanie repozytoriów yuma oraz wbudowane zarządzanie DHCP.
+Cobbler ma API w Pythonie do integracji z innymi aplikacjami
+zarządzającymi na licencji GPL.
 
 %prep
 %setup -q
@@ -86,7 +98,7 @@ cp /var/lib/cobbler/repos*    /var/lib/cobbler/backup 2>/dev/null
 %service cobblerd restart
 
 %preun
-if [ $1 = 0 ]; then
+if [ "$1" = "0" ]; then
 	%service cobblerd stop
 	/sbin/chkconfig --del cobblerd
 fi
@@ -184,8 +196,8 @@ fi
 
 %defattr(755,root,root)
 %dir /var/lib/cobbler
-%dir /var/lib/cobbler/kickstarts/
-%dir /var/lib/cobbler/backup/
+%dir /var/lib/cobbler/kickstarts
+%dir /var/lib/cobbler/backup
 %dir /var/lib/cobbler/triggers/add/distro/pre
 %dir /var/lib/cobbler/triggers/add/distro/post
 %dir /var/lib/cobbler/triggers/add/profile/pre
@@ -204,7 +216,7 @@ fi
 %dir /var/lib/cobbler/triggers/delete/repo/post
 %dir /var/lib/cobbler/triggers/sync/pre
 %dir /var/lib/cobbler/triggers/sync/post
-%dir /var/lib/cobbler/snippets/
+%dir /var/lib/cobbler/snippets
 
 %defattr(744,root,root)
 %config(noreplace) /var/lib/cobbler/triggers/sync/post/restart-services.trigger
