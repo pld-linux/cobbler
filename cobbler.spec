@@ -4,7 +4,7 @@
 # - FHS in web paths
 # - bash-completions
 %define	subver	beta5
-%define	rel		0.6
+%define	rel		0.9
 Summary:	Boot server configurator
 Summary(pl.UTF-8):	Konfiguracja serwera startującego
 Name:		cobbler
@@ -19,7 +19,6 @@ URL:		http://www.cobblerd.org/
 BuildRequires:	python-PyYAML
 BuildRequires:	python-cheetah
 BuildRequires:	python-devel
-Requires(post,preun):	/sbin/chkconfig
 BuildRequires:	python-setuptools
 Requires:	apache-mod_wsgi
 Requires:	createrepo
@@ -33,6 +32,7 @@ Requires:	python-urlgrabber
 Requires:	rsync
 Requires:	tftpdaemon
 Requires:	yum-utils
+Requires(post,preun):	/sbin/chkconfig
 BuildArch:	noarch
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
@@ -69,8 +69,8 @@ zarządzającymi na licencji GPL.
 Summary:	Web interface for Cobbler
 Group:		Applications/System
 Requires:	%{name} = %{version}-%{release}
-Requires:	apache-mod_wsgi
 Requires:	apache-mod_ssl
+Requires:	apache-mod_wsgi
 Requires:	python-django >= 1.1.2
 
 %description web
@@ -91,6 +91,8 @@ existing system. For use with a boot-server configured with Cobbler
 %prep
 %setup -q -n %{name}-%{name}-%{version}-%{subver}
 
+mv config/cobbler{,_web}.conf .
+
 %build
 %{__python} setup.py build
 
@@ -106,13 +108,12 @@ install -d $RPM_BUILD_ROOT/etc/rc.d/init.d
 install -d $RPM_BUILD_ROOT%{_webapps}/%{_webapp}
 #cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_webapps}/%{_webapp}/apache.conf
 #cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_webapps}/%{_webapp}/httpd.conf
-mv $RPM_BUILD_ROOT{%{_sysconfdir}/httpd/conf.d/cobbler.conf,%{_webapps}/%{_webapp}/apache.conf}
-#mv config/cobbler.conf $RPM_BUILD_ROOT/etc/httpd/conf.d/
-#mv config/cobbler_web.conf $RPM_BUILD_ROOT/etc/httpd/conf.d/
-cp $RPM_BUILD_ROOT%{_webapps}/%{_webapp}/{apache,httpd}.conf
+cp -p cobbler.conf $RPM_BUILD_ROOT%{_webapps}/%{_webapp}/apache.conf
+cat cobbler_web.conf >> $RPM_BUILD_ROOT%{_webapps}/%{_webapp}/apache.conf
+cp -p $RPM_BUILD_ROOT%{_webapps}/%{_webapp}/{apache,httpd}.conf
 
 install -d $RPM_BUILD_ROOT/var/lib/tftpboot/images
-mkdir -p $RPM_BUILD_ROOT/var/spool/koan
+install -d $RPM_BUILD_ROOT/var/spool/koan
 
 mv $RPM_BUILD_ROOT/''etc/{init.d,rc.d/init.d}/cobblerd
 
@@ -164,13 +165,27 @@ sed -i -e "s/SECRET_KEY = ''/SECRET_KEY = \'$RAND_SECRET\'/" /usr/share/cobbler/
 %attr(754,root,root) /etc/rc.d/init.d/cobblerd
 
 %dir %{_sysconfdir}/%{name}
+%dir %{_sysconfdir}/%{name}/iso
+%dir %{_sysconfdir}/%{name}/ldap
+%dir %{_sysconfdir}/%{name}/power
+%dir %{_sysconfdir}/%{name}/pxe
+%dir %{_sysconfdir}/%{name}/reporting
 %config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/*.conf
 %config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/*.template
 %config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/*/*.template
+%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/cheetah_macros
+%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/cobblerd
+%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/cobblerd.service
+%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/cobblerd_rotate
+%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/completions
+%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/distro_signatures.json
+%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/import_rsync_whitelist
+%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/rsync.exclude
+%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/settings
+%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/users.digest
+%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/version
 
 %{py_sitescriptdir}/%{name}
-# XXX why
-#%exclude %{py_sitescriptdir}/%{name}/sub_process.py*
 %{py_sitescriptdir}/%{name}*.egg-info
 
 %{_datadir}/augeas/lenses/cobblersettings.aug
@@ -207,10 +222,6 @@ sed -i -e "s/SECRET_KEY = ''/SECRET_KEY = \'$RAND_SECRET\'/" /usr/share/cobbler/
 %{_mandir}/man1/koan.1*
 %{_mandir}/man1/cobbler-register.1*
 %{py_sitescriptdir}/koan
-# XXX why?
-#%exclude %{py_sitescriptdir}/koan/sub_process.py*
-#%exclude %{py_sitescriptdir}/koan/opt_parse.py*
-#%exclude %{py_sitescriptdir}/koan/text_wrap.py*
 
 %dir /var/spool/koan
 %dir /var/lib/koan
