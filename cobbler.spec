@@ -2,35 +2,38 @@
 # - avoid using defattr() and giving too much dirs/files to http
 # - webapps
 # - FHS in web paths
+# - bash-completions
+%define	subver	beta5
+%define	rel		0.6
 Summary:	Boot server configurator
 Summary(pl.UTF-8):	Konfiguracja serwera startującego
 Name:		cobbler
-Version:	0.6.4
-Release:	0.6
+Version:	2.4.0
+Release:	0.%{subver}.%{rel}
 License:	GPL v2+
 Group:		Applications/System
-Source0:	http://cobbler.et.redhat.com/download/%{name}-%{version}.tar.gz
-# Source0-md5:	1f46e1860e10b2e250c73ebb2a3d8227
+Source0:	https://github.com/cobbler/cobbler/archive/%{name}-%{version}-%{subver}.tar.gz
+# Source0-md5:	f0b63f64d679e3ee547de2d97b74e681
 Source1:	%{name}-apache.conf
-URL:		http://cobbler.et.redhat.com/
+URL:		http://www.cobblerd.org/
+BuildRequires:	python-PyYAML
 BuildRequires:	python-cheetah
 BuildRequires:	python-devel
-#BuildRequires:	redhat-rpm-config
 Requires(post,preun):	/sbin/chkconfig
-Requires:	apache-mod_proxy
-Requires:	apache-mod_python
+BuildRequires:	python-setuptools
+Requires:	apache-mod_wsgi
 Requires:	createrepo
-Requires:	python >= 2.3
-Requires:	python-cheetah >= 2.0
-Requires:	python-devel
-Requires:	python-rhpl
+#Requires:	genisoimage
+Requires:	python-PyYAML
+Requires:	python-augeas
+Requires:	python-cheetah
+Requires:	python-netaddr
+Requires:	python-simplejson
+Requires:	python-urlgrabber
+Requires:	rsync
 Requires:	tftpdaemon
-Requires:	webapps
-%ifarch %{ix86} %{x8664}
-Requires:	syslinux
-%endif
+Requires:	yum-utils
 BuildArch:	noarch
-ExcludeArch:	ppc
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
 %define		_webapps	/etc/webapps
@@ -62,8 +65,31 @@ mirrorowanie repozytoriów yuma oraz wbudowane zarządzanie DHCP.
 Cobbler ma API w Pythonie do integracji z innymi aplikacjami
 zarządzającymi na licencji GPL.
 
+%package web
+Summary:	Web interface for Cobbler
+Group:		Applications/System
+Requires:	%{name} = %{version}-%{release}
+Requires:	apache-mod_wsgi
+Requires:	apache-mod_ssl
+Requires:	python-django >= 1.1.2
+
+%description web
+Web interface for Cobbler that allows visiting
+<http://server/cobbler_web> to configure the install server.
+
+%package -n koan
+Summary:	Helper tool that performs cobbler orders on remote machines
+Group:		Applications/System
+Requires:	python-simplejson
+Requires:	python-virtinst
+
+%description -n koan
+Koan stands for kickstart-over-a-network and allows for both network
+installation of new virtualized guests and reinstallation of an
+existing system. For use with a boot-server configured with Cobbler
+
 %prep
-%setup -q
+%setup -q -n %{name}-%{name}-%{version}-%{subver}
 
 %build
 %{__python} setup.py build
@@ -72,16 +98,21 @@ zarządzającymi na licencji GPL.
 rm -rf $RPM_BUILD_ROOT
 install -d $RPM_BUILD_ROOT/etc/rc.d/init.d
 %{__python} setup.py install \
-	--optimize=1 \
+	--optimize=2 \
 	--root=$RPM_BUILD_ROOT
+
+%py_postclean
 
 install -d $RPM_BUILD_ROOT%{_webapps}/%{_webapp}
 #cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_webapps}/%{_webapp}/apache.conf
 #cp -a %{SOURCE1} $RPM_BUILD_ROOT%{_webapps}/%{_webapp}/httpd.conf
 mv $RPM_BUILD_ROOT{%{_sysconfdir}/httpd/conf.d/cobbler.conf,%{_webapps}/%{_webapp}/apache.conf}
+#mv config/cobbler.conf $RPM_BUILD_ROOT/etc/httpd/conf.d/
+#mv config/cobbler_web.conf $RPM_BUILD_ROOT/etc/httpd/conf.d/
 cp $RPM_BUILD_ROOT%{_webapps}/%{_webapp}/{apache,httpd}.conf
 
-%py_postclean
+install -d $RPM_BUILD_ROOT/var/lib/tftpboot/images
+mkdir -p $RPM_BUILD_ROOT/var/spool/koan
 
 mv $RPM_BUILD_ROOT/''etc/{init.d,rc.d/init.d}/cobblerd
 
@@ -89,20 +120,19 @@ mv $RPM_BUILD_ROOT/''etc/{init.d,rc.d/init.d}/cobblerd
 rm -rf $RPM_BUILD_ROOT
 
 %post
-cp /var/lib/cobbler/distros*  /var/lib/cobbler/backup 2>/dev/null
-cp /var/lib/cobbler/profiles* /var/lib/cobbler/backup 2>/dev/null
-cp /var/lib/cobbler/systems*  /var/lib/cobbler/backup 2>/dev/null
-cp /var/lib/cobbler/repos*    /var/lib/cobbler/backup 2>/dev/null
-%{_bindir}/cobbler reserialize
 /sbin/chkconfig --add cobblerd
+# reserialize and restart
+# FIXIT: ?????
+#%{_bindir}/cobbler reserialize
 %service cobblerd restart
 
 %preun
-if [ "$1" = "0" ]; then
-	%service cobblerd stop
+if [ $1 = 0 ]; then
 	/sbin/chkconfig --del cobblerd
+	%service cobblerd stop
 fi
 
+%if 0
 %triggerin -- apache1 < 1.3.37-3, apache1-base
 %webapp_register apache %{_webapp}
 
@@ -114,120 +144,75 @@ fi
 
 %triggerun -- apache < 2.2.0, apache-base
 %webapp_unregister httpd %{_webapp}
+%endif
+
+%post web
+# FIXME: this changes on each upgrade -glen
+# Change the SECRET_KEY option in the Django settings.py file
+# required for security reasons, should be unique on all systems
+RAND_SECRET=$(openssl rand -base64 40 | sed 's/\//\\\//g')
+sed -i -e "s/SECRET_KEY = ''/SECRET_KEY = \'$RAND_SECRET\'/" /usr/share/cobbler/web/settings.py
 
 %files
 %defattr(644,root,root,755)
 %doc AUTHORS CHANGELOG README
+%attr(755,root,root) %{_bindir}/cobbler
+%attr(755,root,root) %{_bindir}/cobbler-ext-nodes
+%attr(755,root,root) %{_bindir}/cobblerd
+%attr(755,root,root) %{_sbindir}/tftpd.py*
+%{_mandir}/man1/cobbler.1*
+%attr(754,root,root) /etc/rc.d/init.d/cobblerd
 
+%dir %{_sysconfdir}/%{name}
+%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/*.conf
+%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/*.template
+%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/*/*.template
+
+%{py_sitescriptdir}/%{name}
+# XXX why
+#%exclude %{py_sitescriptdir}/%{name}/sub_process.py*
+%{py_sitescriptdir}/%{name}*.egg-info
+
+%{_datadir}/augeas/lenses/cobblersettings.aug
+
+%config(noreplace) /var/lib/cobbler
+%exclude /var/lib/cobbler/webui_sessions
+
+%{_appdir}
+/var/log/cobbler
+/var/lib/tftpboot/images
+
+# XXX
+%dir /var/www
+%dir /var/lib/tftpboot
+
+%files web
+%defattr(644,root,root,755)
+%doc AUTHORS CHANGELOG README
 %dir %attr(750,root,http) %{_webapps}/%{_webapp}
 %attr(640,root,root) %config(noreplace) %verify(not md5 mtime size) %{_webapps}/%{_webapp}/apache.conf
 %attr(640,root,root) %config(noreplace) %verify(not md5 mtime size) %{_webapps}/%{_webapp}/httpd.conf
 
-%defattr(755,http,http)
-%dir %{_cgibindir}/cobbler
-%{_cgibindir}/cobbler/findks.cgi
-%{_cgibindir}/cobbler/nopxe.cgi
-%{_cgibindir}/cobbler/webui.cgi
-%defattr(660,http,http)
-%config(noreplace) %{_cgibindir}/cobbler/.htaccess
-%config(noreplace) %{_cgibindir}/cobbler/.htpasswd
-
-%defattr(755,http,http)
 %dir %{_datadir}/cobbler
-%dir %{_datadir}/cobbler/webui_templates
-%defattr(444,http,http)
-%{_datadir}/cobbler/webui_templates/*.tmpl
+%{_datadir}/cobbler/web
+%dir %attr(700,http,root) /var/lib/cobbler/webui_sessions
+/var/www/cobbler_webui_content
 
-%defattr(4755,http,http)
-%dir /var/log/cobbler
-%dir /var/log/cobbler/kicklog
-%dir %{_appdir}
-%dir %{_appdir}/localmirror
-%dir %{_appdir}/kickstarts
-%dir %{_appdir}/kickstarts_sys
-%dir %{_appdir}/repo_mirror
-%dir %{_appdir}/repos_profile
-%dir %{_appdir}/repos_system
-%dir %{_appdir}/ks_mirror
-%dir %{_appdir}/ks_mirror/config
-%dir %{_appdir}/images
-%dir %{_appdir}/distros
-%dir %{_appdir}/profiles
-%dir %{_appdir}/systems
-%dir %{_appdir}/links
-%defattr(755,http,http)
-%dir %{_appdir}/webui
-%defattr(444,http,http)
-%{_appdir}/webui/*.css
-%{_appdir}/webui/*.js
-%{_appdir}/webui/*.png
-%{_appdir}/webui/*.html
-%defattr(-,root,root)
-%dir /tftpboot/pxelinux.cfg
-%dir /tftpboot/images
-%attr(755,root,root) %{_bindir}/cobbler
-%attr(755,root,root) %{_bindir}/cobblerd
-%dir %{_sysconfdir}/cobbler
-%config(noreplace) %{_sysconfdir}/cobbler/default.ks
-%config(noreplace) %{_sysconfdir}/cobbler/kickstart_fc5.ks
-%config(noreplace) %{_sysconfdir}/cobbler/kickstart_fc6.ks
-%config(noreplace) %{_sysconfdir}/cobbler/kickstart_fc6_domU.ks
-%config(noreplace) %{_sysconfdir}/cobbler/dhcp.template
-%config(noreplace) %{_sysconfdir}/cobbler/dnsmasq.template
-%config(noreplace) %{_sysconfdir}/cobbler/pxedefault.template
-%config(noreplace) %{_sysconfdir}/cobbler/pxeprofile.template
-%config(noreplace) %{_sysconfdir}/cobbler/pxesystem.template
-%config(noreplace) %{_sysconfdir}/cobbler/pxesystem_ia64.template
-%config(noreplace) %{_sysconfdir}/cobbler/rsync.exclude
-%config(noreplace) /etc/logrotate.d/cobblerd_rotate
-%config(noreplace) %{_sysconfdir}/cobbler/modules.conf
-%config(noreplace) %{_sysconfdir}/cobbler/webui-cherrypy.cfg
-%dir %{py_sitescriptdir}/cobbler
-%dir %{py_sitescriptdir}/cobbler/yaml
-%dir %{py_sitescriptdir}/cobbler/modules
-%dir %{py_sitescriptdir}/cobbler/webui
-%{py_sitescriptdir}/cobbler/*.py[co]
-%{py_sitescriptdir}/cobbler/yaml/*.py[co]
-%{py_sitescriptdir}/cobbler/modules/*.py[co]
-%{py_sitescriptdir}/cobbler/webui/*.py[co]
-%{_mandir}/man1/cobbler.1*
-%attr(754,root,root) /etc/rc.d/init.d/cobblerd
-%dir /var/log/cobbler/syslog
+%files -n koan
+%defattr(644,root,root,755)
+%doc AUTHORS CHANGELOG README
+%attr(755,root,root) %{_bindir}/koan
+%attr(755,root,root) %{_bindir}/ovz-install
+%attr(755,root,root) %{_bindir}/cobbler-register
+%{_mandir}/man1/koan.1*
+%{_mandir}/man1/cobbler-register.1*
+%{py_sitescriptdir}/koan
+# XXX why?
+#%exclude %{py_sitescriptdir}/koan/sub_process.py*
+#%exclude %{py_sitescriptdir}/koan/opt_parse.py*
+#%exclude %{py_sitescriptdir}/koan/text_wrap.py*
 
-%defattr(755,root,root)
-%dir /var/lib/cobbler
-%dir /var/lib/cobbler/kickstarts
-%dir /var/lib/cobbler/backup
-%dir /var/lib/cobbler/triggers/add/distro/pre
-%dir /var/lib/cobbler/triggers/add/distro/post
-%dir /var/lib/cobbler/triggers/add/profile/pre
-%dir /var/lib/cobbler/triggers/add/profile/post
-%dir /var/lib/cobbler/triggers/add/system/pre
-%dir /var/lib/cobbler/triggers/add/system/post
-%dir /var/lib/cobbler/triggers/add/repo/pre
-%dir /var/lib/cobbler/triggers/add/repo/post
-%dir /var/lib/cobbler/triggers/delete/distro/pre
-%dir /var/lib/cobbler/triggers/delete/distro/post
-%dir /var/lib/cobbler/triggers/delete/profile/pre
-%dir /var/lib/cobbler/triggers/delete/profile/post
-%dir /var/lib/cobbler/triggers/delete/system/pre
-%dir /var/lib/cobbler/triggers/delete/system/post
-%dir /var/lib/cobbler/triggers/delete/repo/pre
-%dir /var/lib/cobbler/triggers/delete/repo/post
-%dir /var/lib/cobbler/triggers/sync/pre
-%dir /var/lib/cobbler/triggers/sync/post
-%dir /var/lib/cobbler/snippets
-
-%defattr(744,root,root)
-%config(noreplace) /var/lib/cobbler/triggers/sync/post/restart-services.trigger
-
-%defattr(664,root,root)
-%config(noreplace) /var/lib/cobbler/settings
-%config(noreplace) /var/lib/cobbler/snippets/partition_select
-/var/lib/cobbler/elilo-3.6-ia64.efi
-/var/lib/cobbler/menu.c32
-%defattr(660,http,http)
-%config(noreplace) %{_sysconfdir}/cobbler/auth.conf
-
-%defattr(664,root,root)
-%config(noreplace) /var/lib/cobbler/cobbler_hosts
+%dir /var/spool/koan
+%dir /var/lib/koan
+%dir /var/lib/koan/config
+%dir /var/log/koan
