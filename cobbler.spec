@@ -3,8 +3,9 @@
 # - webapps
 # - FHS in web paths
 # - bash-completions
+# - logrotate
 %define	subver	beta5
-%define	rel		0.9
+%define	rel		0.10
 Summary:	Boot server configurator
 Summary(pl.UTF-8):	Konfiguracja serwera startującego
 Name:		cobbler
@@ -92,6 +93,7 @@ existing system. For use with a boot-server configured with Cobbler
 %setup -q -n %{name}-%{name}-%{version}-%{subver}
 
 mv config/cobbler{,_web}.conf .
+mv config/{cobblerd,cobblerd_rotate,cobblerd.service,cobbler_bash} .
 
 %build
 %{__python} setup.py build
@@ -114,8 +116,7 @@ cp -p $RPM_BUILD_ROOT%{_webapps}/%{_webapp}/{apache,httpd}.conf
 
 install -d $RPM_BUILD_ROOT/var/lib/tftpboot/images
 install -d $RPM_BUILD_ROOT/var/spool/koan
-
-mv $RPM_BUILD_ROOT/''etc/{init.d,rc.d/init.d}/cobblerd
+install -p cobblerd $RPM_BUILD_ROOT/etc/rc.d/init.d/cobblerd
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -174,9 +175,6 @@ sed -i -e "s/SECRET_KEY = ''/SECRET_KEY = \'$RAND_SECRET\'/" /usr/share/cobbler/
 %config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/*.template
 %config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/*/*.template
 %config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/cheetah_macros
-%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/cobblerd
-%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/cobblerd.service
-%config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/cobblerd_rotate
 %config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/completions
 %config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/distro_signatures.json
 %config(noreplace) %verify(not md5 mtime size) %{_sysconfdir}/%{name}/import_rsync_whitelist
