@@ -96,14 +96,12 @@ mv config/cobbler{,_web}.conf .
 mv config/{cobblerd,cobblerd_rotate,cobblerd.service,cobbler_bash} .
 
 %build
-%{__python} setup.py build
+%py_build
 
 %install
 rm -rf $RPM_BUILD_ROOT
 install -d $RPM_BUILD_ROOT/etc/rc.d/init.d
-%{__python} setup.py install \
-	--optimize=2 \
-	--root=$RPM_BUILD_ROOT
+%py_install
 
 %py_postclean
 
